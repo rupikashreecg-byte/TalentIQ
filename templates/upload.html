@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Resume Analysis | TalentIQ{% endblock %}
+{% block content %}
+<section class="welcome"><div><p class="eyebrow">MODULE 01 · RESUME ANALYSIS</p><h1>Upload a resume</h1><p class="muted">Extract selectable text from PDF or TXT files and create a candidate profile.</p></div></section>
+<section class="job-card upload-panel"><div class="upload-symbol">⇧</div><h2>Resume parser</h2><p class="muted">Supported formats: PDF and TXT. Scanned/image-only PDFs require OCR and are not parsed by this prototype.</p><form method="post" enctype="multipart/form-data"><label class="file-picker">Choose resume<input type="file" name="resume" accept=".pdf,.txt" required></label><button class="primary-button" type="submit">Parse resume</button></form><div class="notice"><strong>Privacy and data quality</strong><p>Only upload files you have permission to process. The parser uses rule-based skill extraction; education and experience sections may need manual verification.</p></div></section>
+{% endblock %}

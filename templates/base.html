@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}TalentIQ{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="{% if request.path.startswith('/assessment') or request.path.startswith('/interview') %}exam-mode{% endif %}">
+<aside class="sidebar">
+  <a class="brand" href="/">Talent<span>IQ</span></a>
+  <p class="sidebar-label">RECRUITMENT WORKSPACE</p>
+  <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">▦ &nbsp; Dashboard</a>
+  <a href="/jobs" class="nav-link {% if request.path == '/jobs' %}active{% endif %}">▤ &nbsp; Job Roles</a>
+  <a href="/candidates" class="nav-link {% if request.path.startswith('/candidates') or request.path.startswith('/candidate/') %}active{% endif %}">♙ &nbsp; Candidates</a>
+  <a href="/upload" class="nav-link {% if request.path == '/upload' %}active{% endif %}">⇧ &nbsp; Resume Upload</a>
+  <p class="sidebar-label nav-spacer">ASSESSMENT TOOLS</p>
+  <a href="/assessment" class="nav-link {% if request.path.startswith('/assessment') %}active{% endif %}">◉ &nbsp; Adaptive Assessment</a>
+  <a href="/interview" class="nav-link {% if request.path.startswith('/interview') %}active{% endif %}">✦ &nbsp; AI Interview</a>
+  <a href="/recruiter" class="nav-link {% if request.path == '/recruiter' %}active{% endif %}">▥ &nbsp; Recruiter Intelligence</a>
+  <a href="/research" class="nav-link {% if request.path == '/research' %}active{% endif %}">⌁ &nbsp; Research & Metrics</a>
+  <div class="sidebar-footer">{% if session.get("user_id") %}Signed in as {{ session.get("user_role") }}<br><a href="{{ url_for('logout') }}">Log out</a>{% else %}<a href="{{ url_for('login') }}">Sign in</a> · <a href="{{ url_for('register') }}">Register</a>{% endif %}<br><small>Research prototype · Human review required</small></div>
+</aside>
+<main class="main-content">
+<header class="topbar"><div><p class="eyebrow">INTELLIGENT RECRUITMENT</p><h2>Placement Assessment System</h2></div><span class="status-pill">● Prototype</span></header>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}<div class="flash-list">{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+{% endwith %}
+{% block content %}{% endblock %}
+<footer>TalentIQ · Research prototype · Scores support review and do not make hiring decisions.</footer>
+</main>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body></html>

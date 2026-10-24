@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block title %}Dashboard | TalentIQ{% endblock %}
+{% block content %}
+<section class="welcome"><div><p class="eyebrow">OVERVIEW</p><h1>Your recruitment dashboard</h1><p class="muted">Resume analysis, candidate matching, assessments and interview evaluation in one workspace.</p></div><a class="primary-button" href="/upload">＋ Upload resume</a></section>
+<section class="stats-grid">
+<article class="stat-card"><p>Total Candidates</p><h2>{{ total_candidates }}</h2><span>Candidate records in SQLite</span></article>
+<article class="stat-card"><p>Job Roles</p><h2>{{ jobs|length }}</h2><span>Role profiles available</span></article>
+<article class="stat-card"><p>Applications</p><h2>{{ total_applications }}</h2><span>Candidate-role associations</span></article>
+<article class="stat-card"><p>Assessments</p><h2>{{ assessments }}</h2><span>Completed attempts</span></article>
+<article class="stat-card"><p>Interview reviews</p><h2>{{ interviews }}</h2><span>Saved written evaluations</span></article>
+</section>
+<section class="section-heading"><div><p class="eyebrow">WORKFLOW</p><h2>Project modules</h2></div></section>
+<section class="module-grid">
+<a class="module-card" href="/upload"><span class="module-icon">01</span><h3>Job & Resume Analysis</h3><p>Upload a PDF or TXT resume, extract skills, and inspect a structured profile.</p><span class="text-link">Open module →</span></a>
+<a class="module-card" href="/candidates"><span class="module-icon">02</span><h3>Candidate–Job Matching</h3><p>Compare extracted skills and TF-IDF resume relevance with job requirements.</p><span class="text-link">Open module →</span></a>
+<a class="module-card" href="/assessment"><span class="module-icon">03</span><h3>Adaptive Assessment</h3><p>Take a technical quiz with difficulty tiers and topic-wise feedback.</p><span class="text-link">Open module →</span></a>
+<a class="module-card" href="/interview"><span class="module-icon">04</span><h3>Interview Evaluation</h3><p>Answer role-focused questions and receive rubric-based draft feedback.</p><span class="text-link">Open module →</span></a>
+<a class="module-card" href="/recruiter"><span class="module-icon">05</span><h3>Recruiter Intelligence</h3><p>Compare candidates, inspect component scores, and review skill gaps.</p><span class="text-link">Open module →</span></a>
+</section>
+<section class="section-heading"><div><p class="eyebrow">OPPORTUNITIES</p><h2>Available job roles</h2></div><a href="/jobs" class="text-link">Manage roles →</a></section>
+<section class="job-grid">{% for job in jobs %}<article class="job-card"><div class="job-icon">✳</div><h3>{{ job.title }}</h3><p class="muted">{{ job.description }}</p><div class="job-meta"><span>Minimum CGPA: {{ job.min_cgpa }}</span><span>Graduation year: {{ job.graduation_year }}</span></div><a class="secondary-button" href="/candidates?job_id={{ job.id }}">Review candidates →</a></article>{% endfor %}</section>
+{% endblock %}

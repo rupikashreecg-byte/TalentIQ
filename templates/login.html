@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Create account' if mode == 'register' else 'Sign in' }} | TalentIQ{% endblock %}
+{% block content %}
+<section class="auth-shell"><div class="auth-card"><p class="eyebrow">TALENTIQ ACCESS</p><h1>{{ 'Create your account' if mode == 'register' else 'Welcome back' }}</h1><p class="muted">Sign in as a candidate or recruiter to continue.</p>
+<form method="post" class="form-grid auth-form">
+{% if mode == 'register' %}<label class="full-width">Full name<input name="name" required autocomplete="name"></label>{% endif %}
+<label class="full-width">Email<input type="email" name="email" required autocomplete="email"></label>
+<label class="full-width">Password<input type="password" name="password" required minlength="8" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}">{% if mode == 'register' %}<small>At least 8 characters.</small>{% endif %}</label>
+{% if mode == 'register' %}<label class="full-width">Account type<select name="role"><option value="candidate">Candidate</option><option value="recruiter">Recruiter</option></select></label>{% endif %}
+<div class="full-width"><button class="primary-button" type="submit">{{ 'Create account' if mode == 'register' else 'Sign in' }} →</button></div></form>
+<p class="muted">{% if mode == 'register' %}Already registered? <a href="{{ url_for('login') }}">Sign in</a>{% else %}New to TalentIQ? <a href="{{ url_for('register') }}">Create an account</a>{% endif %}</p></div></section>
+{% endblock %}

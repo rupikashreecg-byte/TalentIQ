@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}AI Interview | TalentIQ{% endblock %}
+{% block content %}
+<section class="welcome"><div><p class="eyebrow">MODULE 04 · INTERVIEW EVALUATION</p><h1>Structured interview review</h1><p class="muted">Complete this interview immediately after the assessment break. Other TalentIQ pages are hidden during the monitored session.</p></div></section>
+<section class="job-card" data-integrity-purpose="interview">
+  <h2>Monitored session</h2>
+  <p class="muted">Share the <strong>TalentIQ interview tab only</strong>. The browser may show other choices, but this page accepts browser-tab sharing only. Choose the tab containing this interview.</p>
+  <p class="muted"><strong>Privacy:</strong> this prototype checks that a browser tab is being shared and logs integrity events. It does not record, store, or upload screen video.</p>
+  <button type="button" class="primary-button" data-integrity-start>Enter fullscreen & share interview tab →</button>
+  <p data-integrity-status role="status" aria-live="polite" class="muted">Monitoring has not started. Answer controls are locked.</p>
+</section>
+<section class="job-card form-card"><form method="post" class="form-grid" data-interview-form>
+<label>Candidate (optional)<select name="candidate_id" data-protected-control><option value="">Practice / no candidate</option>{% for person in all_candidates %}<option value="{{ person.id }}" {% if candidate and candidate.id == person.id %}selected{% endif %}>{{ person.name }} — {{ person.email }}</option>{% endfor %}</select></label>
+<label>Job role<select name="job_id" data-protected-control>{% for j in jobs %}<option value="{{ j.id }}" {% if job and j.id==job.id %}selected{% endif %}>{{ j.title }}</option>{% endfor %}</select></label>
+<label class="full-width">Interview question<select name="question" id="interview-question" data-protected-control>{% for q in questions %}<option>{{ q }}</option>{% endfor %}</select></label>
+<label class="full-width">Candidate answer<textarea name="answer" rows="8" required data-protected-control placeholder="Describe your approach, your own contribution, trade-offs, tests and measurable outcome..."></textarea></label>
+<div class="full-width"><button class="primary-button" type="submit" data-protected-control>Evaluate answer →</button></div>
+</form></section>
+<div class="notice"><strong>Important</strong><p>The rubric is a transparent heuristic based on answer detail, evidence terms and detected resume skills. It does not use a language model or validate factual correctness; a human interviewer must review the answer. Monitoring events are signals for review, not proof of cheating.</p></div>
+{% endblock %}

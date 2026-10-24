@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Adaptive Assessment | TalentIQ{% endblock %}
+{% block content %}
+<section class="welcome exam-welcome"><div><p class="eyebrow">MODULE 03 · ADAPTIVE ASSESSMENT</p><h1>Adaptive technical assessment</h1><p class="muted">Each answer changes the next question's difficulty. Questions cover Python, SQL and data structures.</p></div></section>
+<section class="job-card" data-integrity-purpose="assessment">
+  <h2>Monitored session</h2>
+  <p class="muted">Share the <strong>TalentIQ exam tab only</strong>. The browser may show other choices, but this page accepts browser-tab sharing only. Choose the tab containing this assessment.</p>
+  <p class="muted"><strong>Privacy:</strong> this prototype checks that a browser tab is being shared and logs integrity events. It does not record, store, or upload screen video.</p>
+  <button type="button" class="primary-button" data-integrity-start>Enter fullscreen & share exam tab →</button>
+  <p data-integrity-status role="status" aria-live="polite" class="muted">Monitoring has not started. Answer controls are locked.</p>
+</section>
+{% if adaptive and current %}
+<div class="progress-heading"><span>Question {{ question_number }} of {{ question_total }}</span><span class="skill-tag">Current difficulty: {{ current.difficulty }}</span></div>
+<div class="progress-track"><div class="progress-value" style="width: {{ (question_number / question_total * 100)|round }}%"></div></div>
+<form method="post" class="question-list" data-integrity-form data-question-form>
+  <input type="hidden" name="question_id" value="{{ current.id }}">
+  <section class="job-card question-card" id="active-question" tabindex="-1"><div class="question-meta"><span class="skill-tag">{{ current.topic }}</span><span class="muted">Level {{ current.difficulty }}</span></div><h3>{{ current.question }}</h3>
+  {% for option in current.options %}<label class="option-row"><input type="radio" name="answer" value="{{ option }}" required data-protected-control disabled><span>{{ option }}</span></label>{% endfor %}
+  </section><button class="primary-button" type="submit" data-protected-control disabled>Submit answer →</button>
+</form>
+{% elif questions %}
+<section class="job-card"><h2>Selected difficulty quiz</h2><p class="muted">This fixed-tier mode is for practice. Use the adaptive assessment from the main link for changing difficulty.</p><a class="primary-button" href="/assessment">Start adaptive assessment →</a></section>
+{% else %}
+<section class="job-card"><h2>Ready to begin?</h2><p class="muted">The assessment will ask up to six questions. Correct answers increase difficulty; incorrect answers lower it. Results include explanations and topic-wise scores.</p><p>Click “Enter fullscreen & share exam tab” above, then submit your answer once the controls unlock.</p></section>
+{% endif %}
+<div class="notice"><strong>Assessment scope</strong><p>This is a rule-based demo question bank, not a generative agent. Results are practice indicators and should not be treated as a validated hiring score. Browser signals can be inaccurate and must be reviewed by a human.</p></div>
+{% endblock %}
