@@ -1,12 +1,109 @@
-{% extends "base.html" %}{% block title %}Job Roles | TalentIQ{% endblock %}
+
+{% extends "base.html" %}
+
+{% block title %}Job Roles | TalentIQ{% endblock %}
+
 {% block content %}
-<section class="welcome"><div><p class="eyebrow">OPPORTUNITY MANAGEMENT</p><h1>Job roles</h1><p class="muted">Add role descriptions; TalentIQ extracts known skills from the text.</p></div></section>
-<section class="job-card form-card"><h2>Add a job role</h2><form method="post" class="form-grid">
-<label>Job title<input name="title" required placeholder="e.g. Junior Data Analyst"></label>
-<label>Minimum CGPA<input name="min_cgpa" type="number" min="0" max="10" step="0.01" required value="7.0"></label>
-<label>Expected graduation year<input name="graduation_year" type="number" min="2020" max="2040" required value="2028"></label>
-<label class="full-width">Job description<textarea name="description" required rows="4" placeholder="Describe responsibilities and skills: Python, SQL, data analysis..."></textarea></label>
-<div class="full-width"><button class="primary-button" type="submit">Save job role</button></div></form><p class="muted">Required skills are inferred from the supported skill dictionary. Review them before relying on the match score.</p></section>
-<section class="section-heading"><div><p class="eyebrow">OPEN ROLES</p><h2>{{ jobs|length }} job roles</h2></div></section>
-<section class="job-grid">{% for job in jobs %}<article class="job-card"><div class="job-icon">✳</div><h3>{{ job.title }}</h3><p class="muted">{{ job.description }}</p><div class="job-meta"><span>Minimum CGPA: {{ job.min_cgpa }}</span><span>Graduation year: {{ job.graduation_year }}</span></div><h4>Extracted required skills</h4><div class="tag-list">{% for skill in job.required_skills|from_json %}<span class="skill-tag">{{ skill }}</span>{% else %}<span class="muted">No known skills detected; review description.</span>{% endfor %}</div><a class="secondary-button" href="/candidates?job_id={{ job.id }}">Rank candidates →</a></article>{% endfor %}</section>
+
+<section class="welcome">
+    <div>
+        <p class="eyebrow">OPPORTUNITY MANAGEMENT</p>
+        <h1>Job roles</h1>
+        <p class="muted">Explore opportunities available on TalentIQ.</p>
+    </div>
+</section>
+
+{% if session.get("user_role") == "recruiter" %}
+<section class="job-card form-card">
+    <h2>Add a job role</h2>
+
+    <form method="post" class="form-grid">
+        <input type="hidden" name="action" value="create">
+
+        <label>
+            Job title
+            <input name="title" required
+                   placeholder="e.g. Junior Data Analyst">
+        </label>
+
+        <label>
+            Minimum CGPA
+            <input name="min_cgpa" type="number"
+                   min="0" max="10" step="0.01"
+                   required value="7.0">
+        </label>
+
+        <label>
+            Expected graduation year
+            <input name="graduation_year" type="number"
+                   min="2020" max="2040"
+                   required value="2028">
+        </label>
+
+        <label class="full-width">
+            Job description
+            <textarea name="description" required rows="4"
+                      placeholder="Describe responsibilities and required skills..."></textarea>
+        </label>
+
+        <div class="full-width">
+            <button class="primary-button" type="submit">
+                Save job role
+            </button>
+        </div>
+    </form>
+</section>
+{% endif %}
+
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">OPEN ROLES</p>
+        <h2>{{ jobs|length }} job roles</h2>
+    </div>
+</section>
+
+<section class="job-grid">
+    {% for job in jobs %}
+    <article class="job-card">
+        <div class="job-icon">✳</div>
+
+        <h3>{{ job.title }}</h3>
+        <p class="muted">{{ job.description }}</p>
+
+        <div class="job-meta">
+            <span>Minimum CGPA: {{ job.min_cgpa }}</span>
+            <span>Graduation year: {{ job.graduation_year }}</span>
+        </div>
+
+        <h4>Required skills</h4>
+
+        <div class="tag-list">
+            {% for skill in job.required_skills|from_json %}
+                <span class="skill-tag">{{ skill }}</span>
+            {% else %}
+                <span class="muted">No known skills detected.</span>
+            {% endfor %}
+        </div>
+
+        {% if session.get("user_role") == "candidate" %}
+        <form method="post">
+            <input type="hidden" name="action" value="apply">
+            <input type="hidden" name="job_id" value="{{ job.id }}">
+
+            <button class="primary-button" type="submit">
+                Apply for this job
+            </button>
+        </form>
+        {% elif session.get("user_role") == "recruiter" %}
+        <a class="secondary-button"
+           href="{{ url_for('candidates', job_id=job.id) }}">
+            Rank candidates →
+        </a>
+        {% endif %}
+    </article>
+    {% else %}
+    <p>No job roles are available yet.</p>
+    {% endfor %}
+</section>
+
 {% endblock %}

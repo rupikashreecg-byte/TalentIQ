@@ -1,12 +1,240 @@
+ 
 {% extends "base.html" %}
 {% block title %}{{ 'Create account' if mode == 'register' else 'Sign in' }} | TalentIQ{% endblock %}
+
 {% block content %}
-<section class="auth-shell"><div class="auth-card"><p class="eyebrow">TALENTIQ ACCESS</p><h1>{{ 'Create your account' if mode == 'register' else 'Welcome back' }}</h1><p class="muted">Sign in as a candidate or recruiter to continue.</p>
-<form method="post" class="form-grid auth-form">
-{% if mode == 'register' %}<label class="full-width">Full name<input name="name" required autocomplete="name"></label>{% endif %}
-<label class="full-width">Email<input type="email" name="email" required autocomplete="email"></label>
-<label class="full-width">Password<input type="password" name="password" required minlength="8" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}">{% if mode == 'register' %}<small>At least 8 characters.</small>{% endif %}</label>
-{% if mode == 'register' %}<label class="full-width">Account type<select name="role"><option value="candidate">Candidate</option><option value="recruiter">Recruiter</option></select></label>{% endif %}
-<div class="full-width"><button class="primary-button" type="submit">{{ 'Create account' if mode == 'register' else 'Sign in' }} →</button></div></form>
-<p class="muted">{% if mode == 'register' %}Already registered? <a href="{{ url_for('login') }}">Sign in</a>{% else %}New to TalentIQ? <a href="{{ url_for('register') }}">Create an account</a>{% endif %}</p></div></section>
+<section class="auth-shell">
+  <div class="auth-card">
+
+    <!-- AI Mascot -->
+    <div class="mascot-area">
+      <div class="robot">
+        <div class="robot-antenna"></div>
+        <div class="robot-head">
+          <div class="robot-eyes">
+            <span></span>
+            <span></span>
+          </div>
+          <div class="robot-mouth"></div>
+        </div>
+        <div class="robot-body">
+          <span>AI</span>
+        </div>
+      </div>
+      <p id="mascot-greeting">Hey there! Ready to get started? 👋</p>
+    </div>
+
+    <p class="eyebrow">TALENTIQ ACCESS</p>
+
+    <h1>{{ 'Create your account' if mode == 'register' else 'Welcome back' }}</h1>
+
+    <p class="muted">Sign in as a candidate or recruiter to continue.</p>
+
+    <form method="post" class="form-grid auth-form">
+
+      {% if mode == 'register' %}
+      <label class="full-width">
+        Full name
+        <input name="name" required autocomplete="name">
+      </label>
+      {% endif %}
+
+      <label class="full-width">
+        Email
+        <input type="email" name="email" required autocomplete="email">
+      </label>
+
+      <label class="full-width">
+        Password
+        <div class="password-wrapper">
+          <input
+            id="password"
+            type="password"
+            name="password"
+            required
+            minlength="8"
+            autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}"
+          >
+          <button type="button" class="password-toggle" id="togglePassword">
+            Show
+          </button>
+        </div>
+        {% if mode == 'register' %}
+        <small>At least 8 characters.</small>
+        {% endif %}
+      </label>
+
+      <label class="full-width">
+        I am a
+        <select name="role" id="roleSelect" required>
+          <option value="candidate">Candidate</option>
+          <option value="recruiter">Recruiter</option>
+        </select>
+      </label>
+
+      <div class="full-width">
+        <button class="primary-button login-button" type="submit">
+          {{ 'Create account' if mode == 'register' else 'Sign in' }} →
+        </button>
+      </div>
+
+    </form>
+
+    <p class="muted">
+      {% if mode == 'register' %}
+        Already registered? <a href="{{ url_for('login') }}">Sign in</a>
+      {% else %}
+        New to TalentIQ? <a href="{{ url_for('register') }}">Create an account</a>
+      {% endif %}
+    </p>
+
+  </div>
+</section>
+
+<style>
+.mascot-area {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.robot {
+  width: 105px;
+  margin: 0 auto 12px;
+  position: relative;
+  animation: robot-float 2.5s ease-in-out infinite;
+}
+
+.robot-antenna {
+  width: 4px;
+  height: 15px;
+  background: #8b5cf6;
+  margin: auto;
+  border-radius: 5px;
+}
+
+.robot-head {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  width: 90px;
+  height: 67px;
+  margin: auto;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 7px 18px #7c3aed40;
+}
+
+.robot-eyes {
+  display: flex;
+  gap: 20px;
+}
+
+.robot-eyes span {
+  width: 10px;
+  height: 10px;
+  background: white;
+  border-radius: 50%;
+  animation: blink 4s infinite;
+}
+
+.robot-mouth {
+  width: 20px;
+  height: 8px;
+  border-bottom: 3px solid white;
+  border-radius: 50%;
+}
+
+.robot-body {
+  width: 55px;
+  height: 30px;
+  background: #ddd6fe;
+  margin: 5px auto 0;
+  border-radius: 10px 10px 14px 14px;
+  display: grid;
+  place-items: center;
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+#mascot-greeting {
+  color: #7c3aed;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 65px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: #7c3aed;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: #5b21b6;
+}
+
+.login-button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px #7c3aed35;
+}
+
+@keyframes robot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+@keyframes blink {
+  0%, 45%, 50%, 100% { transform: scaleY(1); }
+  47%, 48% { transform: scaleY(0.1); }
+}
+</style>
+
+<script>
+const passwordInput = document.getElementById("password");
+const togglePassword = document.getElementById("togglePassword");
+
+if (passwordInput && togglePassword) {
+  togglePassword.addEventListener("click", function () {
+    const isHidden = passwordInput.type === "password";
+    passwordInput.type = isHidden ? "text" : "password";
+    togglePassword.textContent = isHidden ? "Hide" : "Show";
+  });
+}
+
+const roleSelect = document.getElementById("roleSelect");
+const greeting = document.getElementById("mascot-greeting");
+
+if (roleSelect && greeting) {
+  function updateGreeting() {
+    greeting.textContent =
+      roleSelect.value === "recruiter"
+        ? "Hello, recruiter! Ready to discover great talent? 🚀"
+        : "Hey candidate! Your next opportunity awaits! ✨";
+  }
+
+  roleSelect.addEventListener("change", updateGreeting);
+  updateGreeting();
+}
+</script>
 {% endblock %}

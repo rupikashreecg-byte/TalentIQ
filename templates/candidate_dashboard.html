@@ -1,0 +1,36 @@
+
+{% extends "base.html" %}
+
+{% block title %}Candidate Dashboard | TalentIQ{% endblock %}
+
+{% block content %}
+<section class="welcome">
+    <div>
+        <p class="eyebrow">TALENTIQ · CANDIDATE PORTAL</p>
+        <h1>Welcome to your dashboard!</h1>
+        <p class="muted">
+            Prepare for placements, take adaptive assessments,
+            and track your progress.
+        </p>
+    </div>
+</section>
+
+<section class="job-card">
+    <h2>Adaptive Assessment</h2>
+    <p class="muted">
+        Test your skills with TalentIQ's adaptive MCQ and coding assessment.
+    </p>
+    <a href="{{ url_for('assessment') }}" class="primary-button">
+        Start Assessment →
+    </a>
+</section>
+
+<section class="job-card">
+    <h2>Your Progress</h2>
+    <p class="muted">
+        Your assessment history and results will appear here as we add them.
+    </p>
+</section>
+
+<a href="{{ url_for('logout') }}">Log out</a>
+{% endblock %}
