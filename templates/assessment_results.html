@@ -1,0 +1,89 @@
+
+{% extends "base.html" %}
+
+{% block title %}Assessment Results | TalentIQ{% endblock %}
+
+{% block content %}
+<section class="welcome">
+  <div>
+    <p class="eyebrow">CANDIDATE EVALUATION</p>
+    <h1>Assessment Results</h1>
+    <p class="muted">
+      Review completed adaptive assessments, scores and individual answers.
+    </p>
+  </div>
+</section>
+
+{% if results %}
+  {% for item in results %}
+  <section class="job-card">
+    <h2>{{ item.candidate_name or "Unknown candidate" }}</h2>
+    <p>{{ item.candidate_email or "No email available" }}</p>
+
+    <div class="job-meta">
+      <span>
+        Score: {{ item.score }} / {{ item.total }}
+      </span>
+      <span>
+        {% if item.total %}
+          {{ ((item.score / item.total) * 100)|round(1) }}%
+        {% else %}
+          0%
+        {% endif %}
+      </span>
+      <span>
+        Submitted: {{ item.created_at or "Date unavailable" }}
+      </span>
+    </div>
+
+    <h3>Topic-wise performance</h3>
+
+    {% if item.topics %}
+      {% for topic, data in item.topics.items() %}
+      <p>
+        <strong>{{ topic }}:</strong>
+        {{ data.correct }} correct out of {{ data.total }}
+      </p>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No topic breakdown available.</p>
+    {% endif %}
+
+    <h3>Question-by-question review</h3>
+
+    {% for answer in item.answers %}
+    <div class="job-card">
+      <p><strong>Topic:</strong> {{ answer.topic }}</p>
+      <p><strong>Question:</strong> {{ answer.question }}</p>
+      <p><strong>Candidate's answer:</strong> {{ answer.chosen }}</p>
+      <p><strong>Correct answer:</strong> {{ answer.correct_answer }}</p>
+
+      {% if answer.is_correct %}
+        <p><strong>Result:</strong> Correct</p>
+      {% else %}
+        <p><strong>Result:</strong> Incorrect</p>
+      {% endif %}
+    </div>
+    {% else %}
+      <p class="muted">No individual answers were saved.</p>
+    {% endfor %}
+  </section>
+  {% endfor %}
+{% else %}
+  <section class="job-card">
+    <h2>No completed assessments yet</h2>
+    <p class="muted">
+      Once a candidate completes an assessment, their score and answers
+      will appear here.
+    </p>
+  </section>
+{% endif %}
+
+<div class="notice">
+  <strong>Human review required</strong>
+  <p>
+    Assessment scores are supporting information, not automatic hiring
+    decisions. Review results in context.
+  </p>
+</div>
+{% endblock %}

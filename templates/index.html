@@ -1,11 +1,13 @@
 {% extends "base.html" %}{% block title %}Dashboard | TalentIQ{% endblock %}
 {% block content %}
-<section class="welcome"><div><p class="eyebrow">OVERVIEW</p><h1>Your recruitment dashboard</h1><p class="muted">Resume analysis, candidate matching, assessments and interview evaluation in one workspace.</p></div><a class="primary-button" href="/upload">＋ Upload resume</a></section>
+<section class="welcome"><div><p class="eyebrow">OVERVIEW</p><h1>Your recruitment dashboard</h1><p class="muted">Resume analysis, candidate matching, assessments and interview evaluation in one workspace.</p></div>{% if session.get("user_role") == "candidate" %}
+    <a class="primary-button" href="/upload">＋ Upload resume</a>
+{% endif %}</section>
 <section class="stats-grid">
 <article class="stat-card"><p>Total Candidates</p><h2>{{ total_candidates }}</h2><span>Candidate records in SQLite</span></article>
 <article class="stat-card"><p>Job Roles</p><h2>{{ jobs|length }}</h2><span>Role profiles available</span></article>
 <article class="stat-card"><p>Applications</p><h2>{{ total_applications }}</h2><span>Candidate-role associations</span></article>
-<article class="stat-card"><p>Assessments</p><h2>{{ assessments }}</h2><span>Completed attempts</span></article>
+<article class="stat-card"><p>Assessments</p><h2>{{ assessment_count }}</h2><span>Completed attempts</span></article>
 <article class="stat-card"><p>Interview reviews</p><h2>{{ interviews }}</h2><span>Saved written evaluations</span></article>
 </section>
 <section class="section-heading"><div><p class="eyebrow">WORKFLOW</p><h2>Project modules</h2></div></section>

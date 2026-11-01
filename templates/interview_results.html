@@ -1,0 +1,31 @@
+
+{% extends "base.html" %}
+{% block title %}Interview Results | TalentIQ{% endblock %}
+
+{% block content %}
+<section class="welcome">
+  <div>
+    <p class="eyebrow">RECRUITER REVIEW</p>
+    <h1>Interview Results</h1>
+    <p class="muted">Review submitted candidate answers and feedback.</p>
+  </div>
+</section>
+
+{% for item in results %}
+<section class="job-card">
+  <h2>{{ item.candidate_name or "Unknown candidate" }}</h2>
+  <p><strong>Job:</strong> {{ item.job_title or "Not specified" }}</p>
+  <p><strong>Score:</strong> {{ item.score }}/100</p>
+  <p><strong>Question:</strong> {{ item.question }}</p>
+  <h3>Candidate's answer</h3>
+  <p class="resume-text">{{ item.answer }}</p>
+  <h3>Feedback</h3>
+  <p class="resume-text">{{ item.feedback }}</p>
+  <p class="muted">Human review is required; this score is only a heuristic.</p>
+</section>
+{% else %}
+<section class="job-card">
+  <p>No submitted interview results yet.</p>
+</section>
+{% endfor %}
+{% endblock %}

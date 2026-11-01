@@ -3,6 +3,7 @@ import re
 import sqlite3
 import uuid
 from pathlib import Path
+from functools import wraps
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
@@ -13,6 +14,42 @@ from matcher import extract_skills, rank_candidates, calculate_skill_score
 
 app = Flask(__name__)
 app.secret_key = "change-this-demo-secret"
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            flash("Please log in first.", "error")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+
+
+def role_required(role):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if not session.get("user_id"):
+                flash("Please log in first.", "error")
+                return redirect(url_for("login"))
+
+            if session.get("user_role") != role:
+                flash("You don't have permission to access that page.", "error")
+
+                if session.get("user_role") == "recruiter":
+                    return redirect(url_for("index"))
+
+                return redirect(url_for("candidate_dashboard"))
+
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+
 
 
 @app.template_filter("from_json")
@@ -56,23 +93,54 @@ def initialize_auth_table():
         )""")
 
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        role = request.form.get("role", "")
+
+        if role not in {"candidate", "recruiter"}:
+            flash("Please select a valid account type.", "error")
+            return render_template("login.html", mode="login")
+
         with get_connection() as conn:
-            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            user = conn.execute(
+                "SELECT * FROM users WHERE email = ?",
+                (email,)
+            ).fetchone()
+
         if not user or not check_password_hash(user["password_hash"], password):
             flash("Email or password is incorrect.", "error")
             return render_template("login.html", mode="login")
+
+        if user["role"] != role:
+            flash("The selected account type does not match your account.", "error")
+            return render_template("login.html", mode="login")
+
         session.clear()
         session["user_id"] = user["id"]
         session["user_role"] = user["role"]
         session["candidate_id"] = user["candidate_id"]
+
         flash("Welcome back!", "success")
-        return redirect(url_for("index") if user["role"] == "recruiter" else url_for("assessment"))
+
+        if role == "recruiter":
+            return redirect(url_for("index"))
+        else:
+            return redirect(url_for("candidate_dashboard"))
+
     return render_template("login.html", mode="login")
+
+
+# Candidate dashboard
+@app.route("/candidate-dashboard")
+@role_required("candidate")
+def candidate_dashboard():
+    return render_template("candidate_dashboard.html")
+    
+
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -181,88 +249,143 @@ def allowed_file(filename):
 
 
 @app.route("/integrity/start", methods=["POST"])
+@login_required
 def integrity_start():
-    """Start an integrity session after the browser grants screen-share access."""
+    """Start an integrity session after browser screen-share permission."""
+
     data = request.get_json(silent=True) or {}
     purpose = data.get("purpose")
+    role = session.get("user_role")
+
     if purpose not in {"assessment", "interview"}:
         return {"ok": False, "error": "Invalid session type."}, 400
 
-    # A new session key ties events together; it is not an identity verification token.
+    if purpose == "assessment" and role != "candidate":
+        return {"ok": False, "error": "Candidates only."}, 403
+
+    if purpose == "interview" and role not in {"candidate", "recruiter"}:
+        return {"ok": False, "error": "Login required."}, 403
+
     session_key = str(uuid.uuid4())
+
     session["integrity_session"] = {
         "key": session_key,
         "purpose": purpose,
         "active": True,
         "tab_outs": 0,
     }
-    log_integrity_event(session_key, purpose, "screen_share_started")
+
+    log_integrity_event(
+        session_key, purpose, "screen_share_started"
+    )
+
     return {"ok": True, "message": "Integrity session started."}
 
 
 @app.route("/integrity/event", methods=["POST"])
+@login_required
 def integrity_event():
-    """Receive and persist browser integrity signals for the active session."""
+    """Receive and save browser integrity events."""
+
     active = session.get("integrity_session")
+
     if not active or not active.get("active"):
-        return {"ok": False, "error": "No active integrity session."}, 403
+        return {
+            "ok": False,
+            "error": "No active integrity session."
+        }, 403
+
+    if active.get("purpose") == "assessment" and session.get("user_role") != "candidate":
+        return {"ok": False, "error": "Candidates only."}, 403
 
     data = request.get_json(silent=True) or {}
     event_type = str(data.get("type", ""))[:80]
     details = data.get("details", {})
+
     if not isinstance(details, dict):
         details = {}
 
     allowed_events = {
-        "tab_out", "page_visible", "fullscreen_exited",
-        "copy_attempt", "paste_attempt", "screen_share_stopped",
+        "tab_out",
+        "page_visible",
+        "fullscreen_exited",
+        "copy_attempt",
+        "paste_attempt",
+        "screen_share_stopped",
     }
+
     if event_type not in allowed_events:
         return {"ok": False, "error": "Unsupported event."}, 400
 
     if event_type == "tab_out":
         active["tab_outs"] = int(active.get("tab_outs", 0)) + 1
 
-    log_integrity_event(active["key"], active["purpose"], event_type, details)
+    log_integrity_event(
+        active["key"],
+        active["purpose"],
+        event_type,
+        details
+    )
 
-    # More than three distinct tab-outs pauses the session for review.
     if event_type == "screen_share_stopped" or active.get("tab_outs", 0) > 3:
         active["active"] = False
         session["integrity_session"] = active
+
         reason = (
             "screen sharing stopped"
             if event_type == "screen_share_stopped"
             else "more than three tab-outs"
         )
+
         log_integrity_event(
-            active["key"], active["purpose"], "session_paused",
-            {"reason": reason, "tab_outs": active.get("tab_outs", 0)},
+            active["key"],
+            active["purpose"],
+            "session_paused",
+            {
+                "reason": reason,
+                "tab_outs": active.get("tab_outs", 0)
+            }
         )
+
         return {
             "ok": True,
             "paused": True,
             "reason": reason,
-            "tab_outs": active.get("tab_outs", 0),
+            "tab_outs": active.get("tab_outs", 0)
         }
 
     session["integrity_session"] = active
-    return {"ok": True, "paused": False, "tab_outs": active.get("tab_outs", 0)}
+
+    return {
+        "ok": True,
+        "paused": False,
+        "tab_outs": active.get("tab_outs", 0)
+    }
 
 
 @app.route("/integrity/stop", methods=["POST"])
+@login_required
 def integrity_stop():
-    """End the active integrity session and store an end event."""
+    """End the active integrity session."""
+
     active = session.get("integrity_session")
+
     if active and active.get("key"):
         log_integrity_event(
-            active["key"], active.get("purpose", "unknown"), "session_ended"
+            active["key"],
+            active.get("purpose", "unknown"),
+            "session_ended"
         )
+
         active["active"] = False
         session["integrity_session"] = active
+
     return {"ok": True}
 
 
+# Recruiter dashboard
 @app.route("/")
+@role_required("recruiter")
 def index():
     jobs = get_jobs()
     with get_connection() as conn:
@@ -274,33 +397,98 @@ def index():
             SELECT c.id, c.name, c.email, c.skills
             FROM candidates c ORDER BY c.id DESC LIMIT 5
         """).fetchall()
+        assessment_count = conn.execute(
+        "SELECT COUNT(*) FROM assessments"
+        ).fetchone()[0]
     return render_template("index.html", jobs=jobs, total_candidates=total_candidates,
-                           total_applications=total_applications, assessments=assessments,
+                           total_applications=total_applications,assessment_count=assessment_count, assessments=assessments,
                            interviews=interviews, recent_candidates=[dict(r) for r in recent])
 
 
+# Shared jobs page: candidates view jobs,
+# recruiters can view and create them
 @app.route("/jobs", methods=["GET", "POST"])
+@login_required
 def jobs():
     if request.method == "POST":
+        action = request.form.get("action", "")
+
+        # Candidate applying for a job
+        if action == "apply":
+            if session.get("user_role") != "candidate":
+                flash("Only candidates can apply for jobs.", "error")
+                return redirect(url_for("jobs"))
+
+            candidate_id = session.get("candidate_id")
+            job_id = request.form.get("job_id", type=int)
+
+            if not candidate_id or not job_id:
+                flash("Candidate profile or job not found.", "error")
+                return redirect(url_for("jobs"))
+
+            with get_connection() as conn:
+                job = conn.execute(
+                    "SELECT id FROM jobs WHERE id = ?",
+                    (job_id,)
+                ).fetchone()
+
+                if not job:
+                    flash("Job role not found.", "error")
+                    return redirect(url_for("jobs"))
+
+                conn.execute("""
+                    INSERT OR IGNORE INTO applications
+                    (candidate_id, job_id)
+                    VALUES (?, ?)
+                """, (candidate_id, job_id))
+
+            flash("Application submitted successfully!", "success")
+            return redirect(url_for("jobs"))
+
+        # Only recruiters can create jobs
+        if session.get("user_role") != "recruiter":
+            flash("Only recruiters can create job roles.", "error")
+            return redirect(url_for("jobs"))
+
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
         min_cgpa = request.form.get("min_cgpa", type=float)
         graduation_year = request.form.get("graduation_year", type=int)
-        if not title or not description or min_cgpa is None or graduation_year is None:
+
+        if (
+            not title
+            or not description
+            or min_cgpa is None
+            or graduation_year is None
+        ):
             flash("Complete all job fields before saving.", "error")
             return redirect(url_for("jobs"))
+
         skills = extract_skills(description)
+
         with get_connection() as conn:
             conn.execute("""
-                INSERT INTO jobs(title, description, required_skills, min_cgpa, graduation_year)
+                INSERT INTO jobs
+                (title, description, required_skills,
+                 min_cgpa, graduation_year)
                 VALUES (?, ?, ?, ?, ?)
-            """, (title, description, json.dumps(skills), min_cgpa, graduation_year))
-        flash("Job role added. Required skills were extracted from the description.", "success")
+            """, (
+                title,
+                description,
+                json.dumps(skills),
+                min_cgpa,
+                graduation_year
+            ))
+
+        flash("Job role added successfully!", "success")
         return redirect(url_for("jobs"))
+
     return render_template("jobs.html", jobs=get_jobs())
 
 
+# Recruiter-only candidate listing
 @app.route("/candidates")
+@role_required("recruiter")
 def candidates():
     selected_job_id = request.args.get("job_id", type=int)
     page = max(request.args.get("page", 1, type=int), 1)
@@ -328,7 +516,9 @@ def candidates():
                            candidates=ranked_candidates, page=page, pages=pages, total=total)
 
 
+# Recruiter-only candidate profile details
 @app.route("/candidate/<int:candidate_id>")
+@role_required("recruiter")
 def candidate_detail(candidate_id):
     candidate = get_candidate(candidate_id)
     if not candidate:
@@ -342,7 +532,9 @@ def candidate_detail(candidate_id):
     return render_template("candidate_detail.html", candidate=candidate, profile=profile)
 
 
+# Shared resume page
 @app.route("/upload", methods=["GET", "POST"])
+@login_required
 def upload_resume():
     if request.method == "POST":
         file = request.files.get("resume")
@@ -377,18 +569,44 @@ def upload_resume():
         email_match = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text)
         name = Path(filename).stem.replace("_", " ").replace("-", " ").title()
         email = email_match.group(0) if email_match else f"upload_{abs(hash(filename + str(len(text))))}@example.invalid"
+        
         with get_connection() as conn:
-            cursor = conn.execute("""
+            if session.get("user_role") == "candidate":
+                candidate_id = session.get("candidate_id")
+
+                if not candidate_id:
+                    flash("Your candidate profile was not found.", "error")
+                    return redirect(url_for("candidate_dashboard"))
+
+                conn.execute("""
+                UPDATE candidates
+                SET resume_text = ?, skills = ?
+                WHERE id = ?
+                """, (text, json.dumps(skills), candidate_id))
+
+            else:
+                cursor = conn.execute("""
                 INSERT INTO candidates
-                (name,email,cgpa,graduation_year,resume_text,skills,technical_score)
+                (name, email, cgpa, graduation_year,
+                 resume_text, skills, technical_score)
                 VALUES (?, ?, NULL, NULL, ?, ?, NULL)
-            """, (name, email, text, json.dumps(skills)))
-            candidate_id = cursor.lastrowid
-            for job in conn.execute("SELECT id FROM jobs").fetchall():
-                conn.execute("INSERT OR IGNORE INTO applications(candidate_id,job_id) VALUES (?,?)",
-                             (candidate_id, job["id"]))
-        flash("Resume parsed and candidate profile created. Qualification fields remain unverified.", "success")
+                """, (name, email, text, json.dumps(skills)))
+
+                candidate_id = cursor.lastrowid
+
+                for job in conn.execute("SELECT id FROM jobs").fetchall():
+                    conn.execute("""
+                    INSERT OR IGNORE INTO applications(candidate_id, job_id)
+                    VALUES (?, ?)
+                    """, (candidate_id, job["id"]))
+
+        if session.get("user_role") == "candidate":
+            flash("Your resume was uploaded successfully.", "success")
+            return redirect(url_for("candidate_dashboard"))
+
+        flash("Resume uploaded and candidate profile created.", "success")
         return redirect(url_for("candidate_detail", candidate_id=candidate_id))
+
     return render_template("upload.html")
 
 
@@ -426,7 +644,9 @@ ASSESSMENT_QUESTIONS = [
 ]
 
 
+# Candidate-only assessment
 @app.route("/assessment", methods=["GET", "POST"])
+@role_required("candidate")
 def assessment():
     # A short adaptive flow: correct answers raise difficulty; incorrect answers lower it.
     state = session.get("adaptive_assessment")
@@ -505,63 +725,161 @@ def assessment():
                            strengths=strengths, improvements=improvements, recommendations=recommendations)
 
 
+# Shared interview page
 @app.route("/interview", methods=["GET", "POST"])
+@role_required("candidate")
 def interview():
     jobs = get_jobs()
-    with get_connection() as conn:
-        all_candidates = [dict(r) for r in conn.execute(
-            "SELECT id, name, email FROM candidates ORDER BY name LIMIT 1000"
-        ).fetchall()]
-    candidate_id = request.args.get("candidate_id", type=int)
-    candidate = get_candidate(candidate_id) if candidate_id else None
-    selected_job_id = request.args.get("job_id", type=int)
-    job = next((j for j in jobs if j["id"] == selected_job_id), jobs[0] if jobs else None)
-    if request.method == "POST":
-        if not active_integrity_session("interview"):
-            flash(
-                "Start screen sharing and the monitored interview session before submitting an answer.",
-                "error",
-            )
-            return redirect(url_for("interview"))
+    role = session.get("user_role")
 
-        candidate_id = request.form.get("candidate_id", type=int)
-        candidate = get_candidate(candidate_id) if candidate_id else None
-        job_id = request.form.get("job_id", type=int)
-        job = next((j for j in jobs if j["id"] == job_id), jobs[0] if jobs else None)
-        answer = request.form.get("answer", "").strip()
-        question = request.form.get("question", "Explain a relevant project and your contribution.")
-        if len(answer) < 10:
-            flash("Please enter a more detailed answer before submitting.", "error")
-            return redirect(url_for("interview", candidate_id=candidate_id or "", job_id=job_id or ""))
-        word_count = len(answer.split())
-        evidence_terms = ["because", "implemented", "designed", "tested", "measured", "improved", "result", "trade-off", "challenge", "solution"]
-        evidence_count = sum(1 for term in evidence_terms if term in answer.lower())
-        clarity = min(100, round(word_count / 1.2))
-        evidence = min(100, evidence_count * 15)
-        relevance = min(100, 35 + sum(1 for s in extract_skills((candidate or {}).get("resume_text", "")) if s in answer.lower()) * 12)
-        score = round(0.35 * clarity + 0.35 * evidence + 0.30 * relevance, 1)
-        feedback = []
-        if word_count < 40: feedback.append("Add more detail and explain your own contribution.")
-        if evidence_count < 2: feedback.append("Include specific actions, decisions, testing and measurable outcomes.")
-        if not feedback: feedback.append("Good structure detected. A human reviewer should verify the technical accuracy.")
-        with get_connection() as conn:
-            cursor = conn.execute("""
-                INSERT INTO interviews(candidate_id, job_id, question, answer, score, feedback)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (candidate_id, job["id"] if job else None, question, answer, score, "\n".join(feedback)))
-            interview_id = cursor.lastrowid
-        return render_template("interview_result.html", score=score, feedback=feedback, answer=answer,
-                               question=question, interview_id=interview_id)
+    with get_connection() as conn:
+        all_candidates = [
+            dict(row) for row in conn.execute(
+                "SELECT id, name, email FROM candidates ORDER BY name LIMIT 1000"
+            ).fetchall()
+        ]
+
+    # Candidates can only interview using their own profile.
+    if role == "candidate":
+        candidate_id = session.get("candidate_id")
+    else:
+        candidate_id = request.args.get("candidate_id", type=int)
+
+    candidate = get_candidate(candidate_id) if candidate_id else None
+
+    selected_job_id = request.args.get("job_id", type=int)
+    job = next(
+        (j for j in jobs if j["id"] == selected_job_id),
+        jobs[0] if jobs else None
+    )
+
     questions = [
         "Describe a project relevant to this role. What did you personally implement?",
         "Explain a technical challenge you faced, the options you considered, and why you chose your solution.",
         "How did you test your work and measure whether it succeeded?"
     ]
-    return render_template("interview.html", jobs=jobs, candidate=candidate, all_candidates=all_candidates,
-                           job=job, questions=questions)
 
+    if request.method == "POST":
+        if not active_integrity_session("interview"):
+            flash(
+                "Start the monitored interview session before submitting an answer.",
+                "error"
+            )
+            return redirect(url_for("interview"))
 
+        if role == "candidate":
+            candidate_id = session.get("candidate_id")
+        else:
+            candidate_id = request.form.get("candidate_id", type=int)
+
+        candidate = get_candidate(candidate_id) if candidate_id else None
+
+        if role == "candidate" and not candidate:
+            flash("Your candidate profile was not found.", "error")
+            return redirect(url_for("candidate_dashboard"))
+
+        job_id = request.form.get("job_id", type=int)
+        job = next((j for j in jobs if j["id"] == job_id), None)
+
+        if not job:
+            flash("Please select a valid job role.", "error")
+            return redirect(url_for("interview"))
+
+        answer = request.form.get("answer", "").strip()
+        question = request.form.get(
+            "question",
+            "Explain a relevant project and your contribution."
+        )
+
+        if len(answer) < 10:
+            flash("Please enter a more detailed answer.", "error")
+            return redirect(url_for("interview", job_id=job_id))
+
+        word_count = len(answer.split())
+
+        evidence_terms = [
+            "because", "implemented", "designed", "tested",
+            "measured", "improved", "result", "trade-off",
+            "challenge", "solution"
+        ]
+
+        evidence_count = sum(
+            1 for term in evidence_terms if term in answer.lower()
+        )
+
+        clarity = min(100, round(word_count / 1.2))
+        evidence = min(100, evidence_count * 15)
+
+        resume_text = (candidate or {}).get("resume_text", "")
+        candidate_skills = extract_skills(resume_text)
+
+        relevance = min(
+            100,
+            35 + sum(
+                1 for skill in candidate_skills
+                if skill.lower() in answer.lower()
+            ) * 12
+        )
+
+        score = round(
+            0.35 * clarity + 0.35 * evidence + 0.30 * relevance,
+            1
+        )
+
+        feedback = []
+
+        if word_count < 40:
+            feedback.append(
+                "Add more detail and explain your own contribution."
+            )
+
+        if evidence_count < 2:
+            feedback.append(
+                "Include specific actions, decisions, testing and measurable outcomes."
+            )
+
+        if not feedback:
+            feedback.append(
+                "Good structure detected. A human reviewer should verify the technical accuracy."
+            )
+
+        with get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO interviews
+                    (candidate_id, job_id, question, answer, score, feedback)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                candidate_id,
+                job["id"],
+                question,
+                answer,
+                score,
+                "\n".join(feedback)
+            ))
+
+            interview_id = cursor.lastrowid
+
+        return render_template(
+            "interview_result.html",
+            score=score,
+            feedback=feedback,
+            answer=answer,
+            question=question,
+            interview_id=interview_id
+        )
+
+    return render_template(
+        "interview.html",
+        jobs=jobs,
+        candidate=candidate,
+        all_candidates=all_candidates if role == "recruiter" else [],
+        job=job,
+        questions=questions
+    )
+
+# Recruiter-only recruitment dashboard
 @app.route("/recruiter")
+@role_required("recruiter")
 def recruiter():
     jobs = get_jobs()
     selected_job_id = request.args.get("job_id", type=int)
@@ -581,7 +899,9 @@ def recruiter():
                            assessment_count=assessments, interview_count=interviews)
 
 
+# Recruiter-only research and analytics
 @app.route("/research")
+@role_required("recruiter")
 def research():
     with get_connection() as conn:
         candidate_count = conn.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
@@ -609,6 +929,95 @@ def health():
     with get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
     return {"status": "ok", "candidate_count": count}
+
+@app.route("/recruiter/interview-results")
+@role_required("recruiter")
+def interview_results():
+    with get_connection() as conn:
+        results = conn.execute("""
+            SELECT i.*, c.name AS candidate_name, j.title AS job_title
+            FROM interviews i
+            LEFT JOIN candidates c ON c.id = i.candidate_id
+            LEFT JOIN jobs j ON j.id = i.job_id
+            ORDER BY i.id DESC
+        """).fetchall()
+
+    return render_template(
+        "interview_results.html",
+        results=[dict(row) for row in results]
+    )
+
+
+@app.route("/recruiter/assessment-results")
+@role_required("recruiter")
+def assessment_results():
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT
+                a.id,
+                a.candidate_id,
+                a.score,
+                a.total,
+                a.topic_scores,
+                a.answers_json,
+                a.created_at,
+                c.name AS candidate_name,
+                c.email AS candidate_email
+            FROM assessments a
+            LEFT JOIN candidates c ON c.id = a.candidate_id
+            ORDER BY a.id DESC
+        """).fetchall()
+
+    reports = []
+
+    question_lookup = {
+        q["id"]: q for q in ASSESSMENT_QUESTIONS
+    }
+
+    for row in rows:
+        report = dict(row)
+
+        try:
+            report["topics"] = json.loads(
+                report["topic_scores"] or "{}"
+            )
+        except (TypeError, json.JSONDecodeError):
+            report["topics"] = {}
+
+        try:
+            saved_answers = json.loads(
+                report["answers_json"] or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            saved_answers = []
+
+        report["answers"] = []
+
+        for answer in saved_answers:
+            question = question_lookup.get(
+                answer.get("question_id"), {}
+            )
+
+            report["answers"].append({
+                "topic": answer.get(
+                    "topic", question.get("topic", "General")
+                ),
+                "question": question.get(
+                    "question", "Question unavailable"
+                ),
+                "chosen": answer.get("answer", "Not answered"),
+                "correct_answer": question.get(
+                    "answer", "Unavailable"
+                ),
+                "is_correct": answer.get("correct", False)
+            })
+
+        reports.append(report)
+
+    return render_template(
+        "assessment_results.html",
+        results=reports
+    )
 
 
 if __name__ == "__main__":

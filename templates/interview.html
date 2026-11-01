@@ -1,20 +1,67 @@
 {% extends "base.html" %}
-{% block title %}AI Interview | TalentIQ{% endblock %}
+{% block title %}Interview | TalentIQ{% endblock %}
 {% block content %}
-<section class="welcome"><div><p class="eyebrow">MODULE 04 · INTERVIEW EVALUATION</p><h1>Structured interview review</h1><p class="muted">Complete this interview immediately after the assessment break. Other TalentIQ pages are hidden during the monitored session.</p></div></section>
+<section class="welcome"><div><p class="eyebrow">MODULE 04 · INTERVIEW EVALUATION</p><h1>{% if session.get('user_role') == 'candidate' %}Your interview{% else %}Structured interview review{% endif %}</h1><p class="muted">{% if session.get('user_role') == 'candidate' %}Answer the interview question for your selected role. Your answer will be evaluated and saved to your candidate record.{% else %}Select a candidate and role to conduct or evaluate an interview.{% endif %}</p></div></section>
 <section class="job-card" data-integrity-purpose="interview">
   <h2>Monitored session</h2>
-  <p class="muted">Share the <strong>TalentIQ interview tab only</strong>. The browser may show other choices, but this page accepts browser-tab sharing only. Choose the tab containing this interview.</p>
-  <p class="muted"><strong>Privacy:</strong> this prototype checks that a browser tab is being shared and logs integrity events. It does not record, store, or upload screen video.</p>
-  <button type="button" class="primary-button" data-integrity-start>Enter fullscreen & share interview tab →</button>
+  <p class="muted">Share the <strong>TalentIQ interview tab only</strong>. This prototype logs integrity events; it does not record, store, or upload screen video.</p>
+  <button type="button" class="primary-button" data-integrity-start>Enter fullscreen &amp; share interview tab →</button>
   <p data-integrity-status role="status" aria-live="polite" class="muted">Monitoring has not started. Answer controls are locked.</p>
 </section>
-<section class="job-card form-card"><form method="post" class="form-grid" data-interview-form>
-<label>Candidate (optional)<select name="candidate_id" data-protected-control><option value="">Practice / no candidate</option>{% for person in all_candidates %}<option value="{{ person.id }}" {% if candidate and candidate.id == person.id %}selected{% endif %}>{{ person.name }} — {{ person.email }}</option>{% endfor %}</select></label>
-<label>Job role<select name="job_id" data-protected-control>{% for j in jobs %}<option value="{{ j.id }}" {% if job and j.id==job.id %}selected{% endif %}>{{ j.title }}</option>{% endfor %}</select></label>
-<label class="full-width">Interview question<select name="question" id="interview-question" data-protected-control>{% for q in questions %}<option>{{ q }}</option>{% endfor %}</select></label>
-<label class="full-width">Candidate answer<textarea name="answer" rows="8" required data-protected-control placeholder="Describe your approach, your own contribution, trade-offs, tests and measurable outcome..."></textarea></label>
-<div class="full-width"><button class="primary-button" type="submit" data-protected-control>Evaluate answer →</button></div>
-</form></section>
-<div class="notice"><strong>Important</strong><p>The rubric is a transparent heuristic based on answer detail, evidence terms and detected resume skills. It does not use a language model or validate factual correctness; a human interviewer must review the answer. Monitoring events are signals for review, not proof of cheating.</p></div>
+<section class="job-card form-card">
+<form method="post" class="form-grid" data-interview-form>
+  {% if session.get('user_role') == 'recruiter' %}
+  <label>Candidate<select name="candidate_id" data-protected-control required><option value="">Choose a candidate</option>{% for person in all_candidates %}<option value="{{ person.id }}" {% if candidate and candidate.id == person.id %}selected{% endif %}>{{ person.name }} — {{ person.email }}</option>{% endfor %}</select></label>
+  {% else %}
+  <p class="muted full-width">Interviewing as: <strong>{{ candidate.name if candidate else 'Your candidate profile' }}</strong></p>
+  {% endif %}
+  <label>Job role<select name="job_id" data-protected-control required>{% for j in jobs %}<option value="{{ j.id }}" {% if job and j.id == job.id %}selected{% endif %}>{{ j.title }}</option>{% endfor %}</select></label>
+  <label class="full-width">Interview question<select name="question" id="interview-question" data-protected-control>{% for q in questions %}<option>{{ q }}</option>{% endfor %}</select></label>
+  <div class="full-width voice-panel"><h3>Voice interview</h3><p class="muted">Listen to the question, then answer aloud. Speech is transcribed in your browser; review it before submitting.</p>
+    <div class="voice-controls"><button type="button" class="secondary-button" id="speak-question" data-protected-control>🔊 Read question aloud</button><button type="button" class="primary-button" id="start-speaking" data-protected-control>🎙 Start speaking</button><button type="button" class="secondary-button" id="stop-speaking" data-protected-control disabled>Stop recording</button></div>
+    <p id="voice-status" class="muted" role="status" aria-live="polite">Voice controls are available after the monitored session starts.</p>
+  </div>
+  <label class="full-width">Answer<textarea name="answer" id="candidate-answer" rows="8" required data-protected-control placeholder="Speak your answer or type it here, then review it before submitting."></textarea></label>
+  <div class="full-width"><button class="primary-button" type="submit" data-protected-control>{% if session.get('user_role') == 'candidate' %}Submit interview answer →{% else %}Save interview evaluation →{% endif %}</button></div>
+</form>
+</section>
+<div class="notice"><strong>About the score</strong><p>The rubric is a transparent heuristic based on answer detail, evidence terms and detected resume skills. It does not validate factual correctness; a human interviewer should review results. Monitoring events are signals for review, not proof of cheating.</p></div>
+<script>
+(() => {
+  const questionSelect = document.getElementById("interview-question");
+  const answerBox = document.getElementById("candidate-answer");
+  const speakButton = document.getElementById("speak-question");
+  const startButton = document.getElementById("start-speaking");
+  const stopButton = document.getElementById("stop-speaking");
+  const status = document.getElementById("voice-status");
+  if (!questionSelect || !answerBox || !speakButton || !startButton || !stopButton || !status) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null, finalTranscript = "", isRecognizing = false, lastRecognitionError = "";
+  const setStatus = message => { status.textContent = message; };
+  speakButton.addEventListener("click", () => {
+    if (!("speechSynthesis" in window)) { setStatus("Read-aloud is not supported. Please read the question on screen."); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(questionSelect.value);
+    utterance.lang = document.documentElement.lang || "en-US"; utterance.rate = 0.95;
+    utterance.onstart = () => setStatus("Reading the question aloud…");
+    utterance.onend = () => setStatus("Your turn: press Start speaking and answer aloud.");
+    utterance.onerror = () => setStatus("Audio playback failed. Please read the question on screen.");
+    window.speechSynthesis.speak(utterance);
+  });
+  questionSelect.addEventListener("change", () => { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); setStatus("Question changed. Press Read question aloud when ready."); });
+  if (!SpeechRecognition) {
+    startButton.disabled = true; stopButton.disabled = true;
+    setStatus("Speech-to-text is not supported in this browser. Try Chrome or Edge, or type your answer.");
+  } else {
+    recognition = new SpeechRecognition(); recognition.lang = document.documentElement.lang || "en-US"; recognition.continuous = true; recognition.interimResults = true;
+    recognition.onstart = () => { isRecognizing = true; startButton.disabled = true; stopButton.disabled = false; setStatus("Listening… press Stop recording when finished."); };
+    recognition.onresult = event => { let interim = ""; for (let i = event.resultIndex; i < event.results.length; i++) { const spoken = event.results[i][0].transcript; if (event.results[i].isFinal) finalTranscript += spoken.trim() + " "; else interim += spoken; } answerBox.value = (finalTranscript + interim).trim(); };
+    recognition.onerror = event => { lastRecognitionError = event.error; setStatus("Speech error: " + event.error + ". You can retry or type your answer."); };
+    recognition.onend = () => { isRecognizing = false; startButton.disabled = false; stopButton.disabled = true; setStatus(lastRecognitionError ? "Speech error: " + lastRecognitionError + ". Retry or type your answer." : answerBox.value.trim() ? "Transcription ready. Review your answer." : "No speech captured. Try again or type your answer."); };
+    startButton.addEventListener("click", () => { if (isRecognizing) return; finalTranscript = answerBox.value.trim(); if (finalTranscript) finalTranscript += " "; lastRecognitionError = ""; try { recognition.start(); } catch (error) { setStatus("Could not start speech recognition. Wait a moment and retry, or type your answer."); } });
+    stopButton.addEventListener("click", () => { if (recognition && isRecognizing) recognition.stop(); });
+  }
+  window.addEventListener("beforeunload", () => { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); if (recognition && isRecognizing) recognition.stop(); });
+})();
+</script>
 {% endblock %}
